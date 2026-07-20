@@ -1,6 +1,6 @@
 {
-  "name": "Husky Steps",
-  "short_name": "Husky Steps",
+  "name": "MyMap",
+  "short_name": "MyMap",
   "description": "A private walking and transit centered Seattle pin map for a UW student.",
   "start_url": "./index.html",
   "scope": "./",
