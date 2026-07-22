@@ -1500,17 +1500,9 @@
       return new Date(2000,0,1,h,m).toLocaleTimeString([], {hour:"numeric", minute:"2-digit"});
     }
 
-    function nextDestinationHTML() {
-      const next=todayEvents()[0];
-      if (!next) return `<div class="next-card"><h3>Next destination</h3><p>No more scheduled places today.</p><button class="btn" data-action="add-event">＋ Add schedule item</button></div>`;
-      const place=places.find(p=>p.id===next.placeId);
-      return `<div class="next-card"><h3>Next destination</h3><p><strong>${esc(next.title)}</strong> · ${formatTime(next.time)}</p><p>${place?`${(CATEGORIES[place.category]||CATEGORIES.other).emoji} ${esc(place.title)}`:"Choose a saved location"}</p>${place?`<button class="btn" data-action="plan-event" data-id="${next.id}">Plan this trip</button>`:""}</div>`;
-    }
-
     function showDashboard() {
       openSheet(`
         <div class="sheet-head"><h2>MyMap</h2><button class="close-btn" data-action="close">×</button></div>
-        ${nextDestinationHTML()}
         <div class="quick-grid">
           <button class="quick-card" data-action="go-category" data-category="home"><span>🏠</span>Home</button>
           <button class="quick-card" data-action="show-school"><span>🎓</span>School buildings</button>
@@ -1520,7 +1512,6 @@
           <button class="quick-card" data-action="toggle-transit"><span>🚉</span>Nearby transit</button>
           <button class="quick-card" data-action="show-meet"><span>🤝</span>Meet Me</button>
           <button class="quick-card" data-action="show-findme"><span>📍</span>Find Me</button>
-          <button class="quick-card" data-action="locate"><span>◎</span>My location</button>
         </div>
       `);
     }
@@ -1557,7 +1548,7 @@
         const place=places.find(p=>p.id===e.placeId);
         return `<div class="event-card"><h3>${esc(e.title)}</h3><p>⏰ ${formatTime(e.time)} · ${esc(eventDaysLabel(e))}</p><p>📍 ${place?esc(place.title):"No location selected"}</p><div class="event-actions"><button class="btn primary" data-action="plan-event" data-id="${e.id}">Plan trip</button><button class="btn" data-action="edit-event" data-id="${e.id}">Edit</button></div></div>`;
       }).join("") || `<div class="empty"><span class="big">📅</span>No schedule items yet. Add classes, work shifts, appointments, or regular trips.</div>`;
-      openSheet(`<div class="sheet-head"><h2>Schedule</h2><button class="close-btn" data-action="close">×</button></div>${nextDestinationHTML()}<button class="btn gold" data-action="add-event">＋ Add class, work, or event</button>${items}`);
+      openSheet(`<div class="sheet-head"><h2>Schedule</h2><button class="close-btn" data-action="close">×</button></div><button class="btn gold" data-action="add-event">＋ Add class, work, or event</button>${items}`);
     }
 
     function showEventForm(item={}) {
