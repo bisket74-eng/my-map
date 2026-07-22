@@ -141,6 +141,7 @@
       font-weight: 900;
     }
     .icon-btn:active { transform: scale(.96); }
+    .icon-btn.listening { background: #dc3545; color: #ffffff; }
 
     .jump-strip {
       position: absolute;
@@ -409,7 +410,8 @@
     .maplibregl-ctrl-group button { width: 34px; height: 34px; border: 0; background-color: white; }
     .maplibregl-ctrl-bottom-right { margin-bottom: calc(84px + var(--safe-bottom)) !important; margin-right: 10px !important; }
     .maplibregl-ctrl-bottom-left { margin-bottom: calc(84px + var(--safe-bottom)) !important; margin-left: 10px !important; }
-    .maplibregl-ctrl-attrib { font-size: 9px; background: rgba(255,255,255,.82); }
+    .maplibregl-ctrl-attrib { font-size: 8px; padding: 1px 4px; background: rgba(255,255,255,.55); }
+    .maplibregl-ctrl-attrib a { color: #888; }
     #findPartnerBtn {
       position: fixed;
       right: 10px;
@@ -433,9 +435,10 @@
     #followMeBtn {
       position: fixed;
       right: 10px;
-      bottom: calc(84px + var(--safe-bottom) + 78px);
+      bottom: calc(84px + var(--safe-bottom) + 88px);
       width: 34px;
       height: 34px;
+      box-sizing: border-box;
       border-radius: 50%;
       border: 3px solid var(--purple);
       background: #ffffff;
@@ -454,7 +457,7 @@
     .follow-me-ring { position: absolute; inset: 0; border: 1.5px solid currentColor; border-radius: 50%; box-sizing: border-box; }
     .follow-me-dot { position: absolute; top: 50%; left: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; background: currentColor; border-radius: 50%; }
     @media (min-width: 780px) {
-      #followMeBtn { bottom: calc(10px + 78px); }
+      #followMeBtn { bottom: calc(10px + 88px); }
     }
     @media (min-width: 780px) {
       #findPartnerBtn { bottom: calc(10px + 92px); }
@@ -497,6 +500,7 @@
       <button class="brand" id="menuBtn" aria-label="Open app menu">MM<small>SEATTLE</small></button>
       <form class="search-wrap" id="searchForm">
         <input id="searchInput" type="search" autocomplete="off" enterkeyhint="search" placeholder="Search Seattle places…" aria-label="Search for a place" />
+        <button class="icon-btn" type="button" id="searchMicBtn" aria-label="Search by voice">🎤</button>
         <button class="icon-btn" type="submit" aria-label="Search">⌕</button>
       </form>
     </header>
@@ -640,7 +644,7 @@
       }
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
-    map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-left");
+    map.addControl(new maplibregl.AttributionControl({ compact: false }), "bottom-left");
 
     function setMapView(lat, lng, zoom, animate = false) {
       // Any explicit "go look at this place" call (a neighborhood chip, UW
@@ -1241,7 +1245,7 @@
       for (const selector of selectors) {
         parts.push(`node${selector}(${bbox});way${selector}(${bbox});relation${selector}(${bbox});`);
       }
-      const overpassQuery = `[out:json][timeout:20];(${parts.join("")});out center tags 100;`;
+      const overpassQuery = `[out:json][timeout:10];(${parts.join("")});out center tags 100;`;
       const endpoints = [
         "https://overpass-api.de/api/interpreter",
         "https://overpass.kumi.systems/api/interpreter",
@@ -1249,11 +1253,15 @@
       ];
       for (const endpoint of endpoints) {
         try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 6000);
           const response = await fetch(endpoint, {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
-            body: "data=" + encodeURIComponent(overpassQuery)
+            body: "data=" + encodeURIComponent(overpassQuery),
+            signal: controller.signal
           });
+          clearTimeout(timeoutId);
           if (!response.ok) throw new Error("Nearby search unavailable");
           const data = await response.json();
           const center = map.getCenter();
@@ -1302,12 +1310,15 @@
           ]);
           const combined = [...nearby, ...(geoResponse || [])];
           const seen = new Set();
+          const origin = userLocation || map.getCenter();
           results = combined.filter(r => {
             const key = `${String(r.name || r.display_name).toLowerCase()}|${Number(r.lat).toFixed(4)}|${Number(r.lon).toFixed(4)}`;
             if (seen.has(key)) return false;
             seen.add(key);
             return true;
-          }).slice(0, 30);
+          }).map(r => ({ ...r, _distance: Math.hypot(Number(r.lat) - origin.lat, (Number(r.lon) - origin.lng) * 0.7) }))
+            .sort((a, b) => a._distance - b._distance)
+            .slice(0, 30);
           cache[cacheKey] = { savedAt: now, results };
           const limitedCache = Object.fromEntries(Object.entries(cache).slice(-40));
           localStorage.setItem(SEARCH_CACHE_KEY, JSON.stringify(limitedCache));
@@ -1948,8 +1959,41 @@
 
     document.getElementById("searchForm").addEventListener("submit", event => {
       event.preventDefault();
-      searchPlaces(document.getElementById("searchInput").value);
+      const input = document.getElementById("searchInput");
+      input.blur();
+      searchPlaces(input.value);
     });
+
+    (function setupSearchMic() {
+      const micBtn = document.getElementById("searchMicBtn");
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) { micBtn.style.display = "none"; return; }
+
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = "en-US";
+      let listening = false;
+
+      recognition.onstart = () => { listening = true; micBtn.classList.add("listening"); micBtn.innerText = "●"; };
+      recognition.onend = () => { listening = false; micBtn.classList.remove("listening"); micBtn.innerText = "🎤"; };
+      recognition.onerror = () => { listening = false; micBtn.classList.remove("listening"); micBtn.innerText = "🎤"; };
+
+      recognition.onresult = event => {
+        const transcript = event.results[0][0].transcript.trim();
+        if (!transcript) return;
+        const input = document.getElementById("searchInput");
+        input.value = transcript;
+        input.blur();
+        searchPlaces(transcript);
+      };
+
+      micBtn.addEventListener("click", () => {
+        if (listening) { recognition.stop(); return; }
+        document.getElementById("searchInput").blur();
+        try { recognition.start(); } catch (_) {}
+      });
+    })();
     document.getElementById("addBtn").addEventListener("click", () => {
       if (placementMode) {
         placementMode = false;
