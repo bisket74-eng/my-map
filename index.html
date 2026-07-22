@@ -437,9 +437,9 @@
       width: 44px;
       height: 44px;
       border-radius: 50%;
-      border: 3px solid #ffffff;
-      background: #1877f2;
-      color: #ffffff;
+      border: 3px solid var(--purple);
+      background: #ffffff;
+      color: var(--purple);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -448,8 +448,11 @@
       z-index: 20;
       cursor: pointer;
     }
-    #followMeBtn.following { background: #0d47a1; box-shadow: 0 0 0 6px rgba(24,119,242,.28), var(--shadow); }
+    #followMeBtn.following { background: var(--purple); color: #ffffff; border-color: #ffffff; box-shadow: 0 0 0 6px rgba(75,46,131,.28), var(--shadow); }
     #followMeBtn:active { transform: scale(.94); }
+    .follow-me-icon { position: relative; width: 20px; height: 20px; }
+    .follow-me-ring { position: absolute; inset: 0; border: 2px solid currentColor; border-radius: 50%; box-sizing: border-box; }
+    .follow-me-dot { position: absolute; top: 50%; left: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; background: currentColor; border-radius: 50%; }
     @media (min-width: 780px) {
       #followMeBtn { bottom: calc(10px + 146px); }
     }
@@ -517,7 +520,7 @@
     <div class="sheet-backdrop" id="backdrop"></div>
     <section class="sheet" id="sheet" aria-live="polite"></section>
     <button id="findPartnerBtn" aria-label="Follow her location" title="Follow her location" style="display:none;"><span id="findPartnerBtnIcon">📍</span></button>
-    <button id="followMeBtn" aria-label="Follow my location" title="Follow my location" style="display:none;"><span>◎</span></button>
+    <button id="followMeBtn" aria-label="Follow my location" title="Follow my location" style="display:none;"><span class="follow-me-icon"><span class="follow-me-ring"></span><span class="follow-me-dot"></span></span></button>
     <div class="toast" id="toast"></div>
     <input type="file" id="importInput" accept="application/json,.json" hidden />
   </div>
@@ -586,14 +589,8 @@
     let partnerLat = null;
     let partnerLng = null;
     let followPartner = true;
-    let followProgrammaticMove = false;
     let followMe = true;
     let liveWatchId = null;
-
-    function beginFollowProgrammaticMove() {
-      followProgrammaticMove = true;
-      setTimeout(() => { followProgrammaticMove = false; }, 950);
-    }
     let lastBroadcastAt = 0;
 
     let myDeviceId = localStorage.getItem(DEVICE_ID_KEY);
@@ -646,6 +643,15 @@
     map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-left");
 
     function setMapView(lat, lng, zoom, animate = false) {
+      // Any explicit "go look at this place" call (a neighborhood chip, UW
+      // button, a saved place, etc.) means the map should go wherever it's
+      // told and stop fighting to snap back to a follow target.
+      if (followMe || followPartner) {
+        followMe = false;
+        followPartner = false;
+        updateFollowMeButtonVisibility();
+        updateFindPartnerButtonVisibility();
+      }
       const options = { center: [lng, lat], zoom };
       animate ? map.easeTo(options) : map.jumpTo(options);
     }
@@ -1136,7 +1142,6 @@
         updateFollowMeButtonVisibility();
 
         if (followMe) {
-          beginFollowProgrammaticMove();
           map.easeTo({ center: [longitude, latitude], duration: 900 });
         }
       }, () => {}, { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 });
@@ -1148,8 +1153,7 @@
       followPartner = false;
       updateFollowMeButtonVisibility();
       updateFindPartnerButtonVisibility();
-      beginFollowProgrammaticMove();
-      setMapView(userLocation.lat, userLocation.lng, Math.max(map.getZoom(), 16), true);
+      map.easeTo({ center: [userLocation.lng, userLocation.lat], zoom: Math.max(map.getZoom(), 16) });
     }
 
     function updateFollowMeButtonVisibility() {
@@ -1734,7 +1738,6 @@
       }
 
       if (followPartner) {
-        beginFollowProgrammaticMove();
         map.easeTo({ center: [lng, lat], duration: 900 });
       }
     }
@@ -1752,8 +1755,7 @@
       followMe = false;
       updateFindPartnerButtonVisibility();
       updateFollowMeButtonVisibility();
-      beginFollowProgrammaticMove();
-      setMapView(partnerLat, partnerLng, Math.max(map.getZoom(), 16), true);
+      map.easeTo({ center: [partnerLng, partnerLat], zoom: Math.max(map.getZoom(), 16) });
     }
 
     function updateFindPartnerButtonVisibility() {
@@ -1763,10 +1765,24 @@
       btn.classList.toggle("following", followPartner);
     }
 
-    map.on("dragstart zoomstart", () => {
-      if (followProgrammaticMove) return;
-      if (followPartner) { followPartner = false; updateFindPartnerButtonVisibility(); }
-      if (followMe) { followMe = false; updateFollowMeButtonVisibility(); }
+    map.on("dragstart", e => {
+      if (!e.originalEvent) return;
+      if (followPartner || followMe) {
+        followPartner = false;
+        followMe = false;
+        updateFindPartnerButtonVisibility();
+        updateFollowMeButtonVisibility();
+      }
+    });
+
+    map.on("zoomstart", e => {
+      if (!e.originalEvent) return;
+      if (followPartner || followMe) {
+        followPartner = false;
+        followMe = false;
+        updateFindPartnerButtonVisibility();
+        updateFollowMeButtonVisibility();
+      }
     });
 
     document.getElementById("findPartnerBtn").addEventListener("click", tapFindPartnerBtn);
