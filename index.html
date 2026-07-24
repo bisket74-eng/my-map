@@ -144,6 +144,7 @@
     }
     .icon-btn { flex-shrink: 0; }
     .icon-btn:active { transform: scale(.96); }
+    .icon-btn.listening { background: #dc3545; color: #ffffff; }
     .clear-btn {
       width: auto;
       padding: 0 8px;
@@ -509,6 +510,7 @@
     <header class="topbar">
       <button class="brand" id="menuBtn" aria-label="Open app menu">MM<small>SEATTLE</small></button>
       <form class="search-wrap" id="searchForm">
+        <button class="icon-btn" type="button" id="searchMicBtn" aria-label="Search by voice">🎤</button>
         <input id="searchInput" type="text" autocomplete="off" enterkeyhint="search" placeholder="Search Seattle places…" aria-label="Search for a place" />
         <button class="icon-btn clear-btn" type="button" id="searchClearBtn" aria-label="Clear search">Clear</button>
       </form>
@@ -2040,6 +2042,37 @@
       input.blur();
       clearSearchResultMarkers();
     });
+
+    (function setupSearchMic() {
+      const micBtn = document.getElementById("searchMicBtn");
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) { micBtn.style.display = "none"; return; }
+
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = "en-US";
+      let listening = false;
+
+      recognition.onstart = () => { listening = true; micBtn.classList.add("listening"); micBtn.innerText = "●"; };
+      recognition.onend = () => { listening = false; micBtn.classList.remove("listening"); micBtn.innerText = "🎤"; };
+      recognition.onerror = () => { listening = false; micBtn.classList.remove("listening"); micBtn.innerText = "🎤"; };
+
+      recognition.onresult = event => {
+        const transcript = event.results[0][0].transcript.trim();
+        if (!transcript) return;
+        const input = document.getElementById("searchInput");
+        input.value = transcript;
+        input.blur();
+        searchPlaces(transcript);
+      };
+
+      micBtn.addEventListener("click", () => {
+        if (listening) { recognition.stop(); return; }
+        document.getElementById("searchInput").blur();
+        try { recognition.start(); } catch (_) {}
+      });
+    })();
     document.getElementById("addBtn").addEventListener("click", () => {
       if (placementMode) {
         placementMode = false;
