@@ -12,7 +12,7 @@
   <link rel="icon" href="./icon-192.png" />
   <link rel="apple-touch-icon" href="./icon-192.png" />
   <link rel="preconnect" href="https://unpkg.com" crossorigin />
-  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@^5/dist/maplibre-gl.css" />
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.1.0/dist/maplibre-gl.css" />
   <style>
     /* Critical MapLibre layout rules are included locally. The actual map is
        drawn in one WebGL canvas, so separate image tiles cannot drift apart. */
@@ -478,7 +478,7 @@
     <input type="file" id="importInput" accept="application/json,.json" hidden />
   </div>
 
-  <script src="https://unpkg.com/maplibre-gl@^5/dist/maplibre-gl.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/maplibre-gl@^5/dist/maplibre-gl.js'"></script>
+  <script src="https://unpkg.com/maplibre-gl@5.1.0/dist/maplibre-gl.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/maplibre-gl@5.1.0/dist/maplibre-gl.js'"></script>
   <script>
   (() => {
     "use strict";
@@ -640,7 +640,7 @@
         minzoom: 14,
         layout: {
           "text-field": ["get", "name"],
-          "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
+          "text-font": ["Open Sans Regular"],
           "text-size": ["interpolate", ["linear"], ["zoom"], 14, 10, 16, 13, 18, 15],
           "text-max-width": 10,
           "text-allow-overlap": false,
