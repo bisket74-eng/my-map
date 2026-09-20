@@ -12,7 +12,7 @@
   <link rel="icon" href="./icon-192.png" />
   <link rel="apple-touch-icon" href="./icon-192.png" />
   <link rel="preconnect" href="https://unpkg.com" crossorigin />
-  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.7.1/dist/maplibre-gl.css" />
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@^5/dist/maplibre-gl.css" />
   <style>
     /* Critical MapLibre layout rules are included locally. The actual map is
        drawn in one WebGL canvas, so separate image tiles cannot drift apart. */
@@ -478,7 +478,7 @@
     <input type="file" id="importInput" accept="application/json,.json" hidden />
   </div>
 
-  <script src="https://unpkg.com/maplibre-gl@5.7.1/dist/maplibre-gl.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/maplibre-gl@5.7.1/dist/maplibre-gl.js'"></script>
+  <script src="https://unpkg.com/maplibre-gl@^5/dist/maplibre-gl.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/maplibre-gl@^5/dist/maplibre-gl.js'"></script>
   <script>
   (() => {
     "use strict";
@@ -503,7 +503,6 @@
       { name: "U District Station", lat: 47.6601, lng: -122.3132, rail: true },
       { name: "University of Washington Station", lat: 47.6500, lng: -122.3038, rail: true }
     ];
-    const SEATTLE_VIEWBOX = "-122.4597,47.7341,-122.2244,47.4919";
 
     const CATEGORIES = {
       home:    { label: "Home", emoji: "🏠" },
@@ -546,15 +545,18 @@
       attributionControl: true,
       style: {
         version: 8,
+        glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
         sources: {
           cleanmap: {
             type: "raster",
             tiles: [
-              "https://server.arcgisonline.com/ArcGIS/rest/services/World_Navigation_Maps/MapServer/tile/{z}/{y}/{x}"
+              "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+              "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+              "https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png"
             ],
             tileSize: 256,
             maxzoom: 20,
-            attribution: "Esri, HERE, Garmin, © OpenStreetMap contributors, and the GIS user community"
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
           }
         },
         layers: [{ id: "cleanmap", type: "raster", source: "cleanmap" }]
@@ -638,7 +640,7 @@
         minzoom: 14,
         layout: {
           "text-field": ["get", "name"],
-          "text-font": ["Open Sans Semibold"],
+          "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"],
           "text-size": ["interpolate", ["linear"], ["zoom"], 14, 10, 16, 13, 18, 15],
           "text-max-width": 10,
           "text-allow-overlap": false,
@@ -726,8 +728,6 @@
     let lastMainBackPress = 0;
     let allowBrowserExit = false;
 
-    // Keep one protected main-map history entry. This lets Android's Back
-    // button close MyMap panels before it can leave the installed app.
     try {
       history.replaceState({ mymapRoot: true }, "", location.href);
       history.pushState({ mymapHome: true }, "", location.href);
@@ -739,9 +739,6 @@
       sheet.classList.add("show");
       backdrop.classList.add("show");
 
-      // Only add one browser-history step for the visible panel. Moving from
-      // one panel to another replaces its contents without stacking dozens of
-      // Back presses.
       if (!wasOpen) {
         try { history.pushState({ mymapOverlay: true }, "", location.href); } catch (_) {}
       }
@@ -754,9 +751,6 @@
       editingId = null;
       selectedSearchResult = null;
 
-      // A visible X/backdrop close should immediately make the current
-      // history entry behave like the main map. A phone Back event has already
-      // moved history, so it must not change history again.
       if (wasOpen && !fromPhoneBack) {
         try { history.replaceState({ mymapHome: true }, "", location.href); } catch (_) {}
       }
@@ -837,10 +831,6 @@
       if (!Number.isFinite(meters)) return "Location needed";
       const minutes = Math.max(1, Math.round(meters / 80));
       return `about ${minutes} min`;
-    }
-
-    function currentOrigin() {
-      return userLocation || null;
     }
 
     function showPlace(id) {
@@ -1030,20 +1020,6 @@
         const message = error.code === 1 ? "Location permission was denied." : "Could not find your location.";
         toast(message);
       }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 20000 });
-    }
-
-    function goHome() {
-      const home = places.find(p => p.category === "home");
-      if (!home) {
-        toast("Add an apartment or home pin first.");
-        activeFilter = "home";
-        showPins();
-        return;
-      }
-      setMapView(home.lat, home.lng, 17);
-      const marker = markers.get(home.id);
-      marker?.togglePopup();
-      showPlace(home.id);
     }
 
     function openDirections(place, mode) {
@@ -1278,7 +1254,7 @@
     async function toggleTransit() {
       settings.transitVisible = !settings.transitVisible;
       saveSettings();
-        if (!settings.transitVisible) {
+      if (!settings.transitVisible) {
         transitMarkers.forEach(marker => marker.remove());
         transitMarkers = [];
         toast("Transit stops hidden.");
@@ -1382,7 +1358,6 @@
       }
     }
 
-
     const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 
     function placeOptions(selected="") {
@@ -1415,7 +1390,7 @@
       const next=todayEvents()[0];
       if (!next) return `<div class="next-card"><h3>Next destination</h3><p>No more scheduled places today.</p><button class="btn" data-action="add-event">＋ Add schedule item</button></div>`;
       const place=places.find(p=>p.id===next.placeId);
-      return `<div class="next-card"><h3>Next destination</h3><p><strong>${esc(next.title)}</strong> · ${formatTime(next.time)}</p><p>${place?`${(CATEGORIES[place.category]||CATEGORIES.other).emoji} ${esc(place.title)}`:"Choose a saved location"}</p>${place?`<button class="btn" data-action="plan-event" data-id="${next.id}">Plan this trip</button>`:""}</div>`;
+      return `<div class="next-card"><h3>Next destination</h3><p><strong>${esc(next.title)}</strong> · ${formatTime(next.time)}</p><p>${place?`${(CATEGORIES[place.category]\vert{}\vert{}CATEGORIES.other).emoji}${esc(place.title)}`:"Choose a saved location"}</p>${place?`<button class="btn" data-action="plan-event" data-id="${next.id}">Plan this trip</button>`:""}</div>`;
     }
 
     function showDashboard() {
@@ -1476,7 +1451,7 @@
       openSheet(`<div class="sheet-head"><h2>${item.id?"Edit":"Add"} schedule item</h2><button class="close-btn" data-action="close">×</button></div>
       <form id="eventForm" data-id="${item.id||""}">
         <div class="field"><label>Name</label><input name="title" required maxlength="80" value="${esc(item.title||"")}" placeholder="Biology 101, work, appointment…"></div>
-        <div class="field"><label>Saved destination</label><select name="placeId" required>${placeOptions(item.placeId||"")}</select><small>Save each UW building as its own place, then connect the class to that building.</small></div>
+        <div class="field"><label>Saved destination</label><select name="placeId" required>${placeOptions(item.placeId||"")}</select><small>Save each campus building as its own place, then connect the class to that building.</small></div>
         <div class="field"><label>Start / arrival time</label>${timeSelectHTML("time", item.time||"")}</div>
         <div class="field"><label>Days</label><div class="day-grid">${dayBoxes}</div></div>
         <div class="field"><label>Notes</label><textarea name="notes" maxlength="500">${esc(item.notes||"")}</textarea></div>
@@ -1522,7 +1497,6 @@
 
     function showMeetMe() {
       openSheet(`<div class="sheet-head"><h2>Meet Me</h2><button class="close-btn" data-action="close">×</button></div>
-
       <form id="meetForm"><div class="field"><label>Person 1 starts at</label><select name="a" required>${placeOptions()}</select></div><div class="field"><label>Person 2 starts at</label><select name="b" required>${placeOptions()}</select></div><button class="btn primary" type="submit">Show meeting area</button></form>`);
     }
 
@@ -1535,10 +1509,6 @@
       const matches=places.filter(p=>p.category===category);
       if(!matches.length){activeFilter=category;showPins();toast(`Add a ${category} place first.`);return;}
       if(matches.length===1){closeSheet();setMapView(matches[0].lat,matches[0].lng,16,true);showPlace(matches[0].id);} else {activeFilter=category;showPins();}
-    }
-
-    function showMenu() {
-      showDashboard();
     }
 
     function showHelp() {
