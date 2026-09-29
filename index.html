@@ -478,25 +478,6 @@
     <input type="file" id="importInput" accept="application/json,.json" hidden />
   </div>
 
-  <script>
-  /* TEMP DIAGNOSTIC - remove once the map works */
-  (function(){
-    var box;
-    function show(t){
-      if(!box){box=document.createElement("div");box.id="diagBox";
-        box.style.cssText="position:fixed;left:8px;right:8px;top:230px;z-index:99999;background:#fff3f2;color:#8a1c12;border:2px solid #b42318;border-radius:12px;padding:10px;font:12px/1.35 monospace;white-space:pre-wrap;word-break:break-word;max-height:40vh;overflow:auto";
-        document.body.appendChild(box);}
-      box.textContent+=t+"\n";
-    }
-    window.__diag=show;
-    window.addEventListener("error",function(e){show("ERROR: "+(e.message||e.type)+(e.filename?" @"+e.filename.split("/").pop()+":"+e.lineno:""));},true);
-    window.addEventListener("unhandledrejection",function(e){show("PROMISE: "+(e.reason&&e.reason.message||e.reason));});
-    window.addEventListener("load",function(){
-      var gl=false;try{var c=document.createElement("canvas");gl=!!(c.getContext("webgl2")||c.getContext("webgl"));}catch(_){}
-      show("maplibre loaded: "+(!!window.maplibregl)+" | webgl: "+gl+" | MapLibre "+(window.maplibregl&&maplibregl.version||"n/a"));
-    });
-  })();
-  </script>
   <script src="https://unpkg.com/maplibre-gl@5.1.0/dist/maplibre-gl.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/maplibre-gl@5.1.0/dist/maplibre-gl.js'"></script>
   <script>
   (() => {
