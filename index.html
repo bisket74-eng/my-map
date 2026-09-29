@@ -425,7 +425,7 @@
     .popup-title { font-weight: 900; margin-bottom: 4px; }
     .popup-meta { color: var(--muted); font-size: 12px; }
 
-    .map-pin { background: transparent; border: 0; }
+    .map-pin { background: transparent; border: 0; cursor: pointer; }
     .pin-bubble {
       width: 42px;
       height: 42px;
@@ -440,7 +440,7 @@
     .pin-bubble > span { transform: rotate(45deg); font-size: 21px; }
     .pin-bubble.favorite { background: #a33b67; }
     .pin-bubble.visited { background: #2d7a51; }
-    .transit-marker { background: transparent; border: 0; }
+    .transit-marker { background: transparent; border: 0; cursor: pointer; }
     .transit-bubble { width: 30px; height: 30px; display: grid; place-items: center; border: 2px solid white; border-radius: 10px; box-shadow: 0 3px 9px rgba(0,0,0,.25); background: #206da8; font-size: 16px; }
     .user-dot { width: 22px; height: 22px; border-radius: 50%; background: #1877f2; border: 4px solid white; box-shadow: 0 0 0 8px rgba(24,119,242,.2), 0 3px 10px rgba(0,0,0,.25); }
 
@@ -489,6 +489,7 @@
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3"/></svg>
     </button>
     <button class="follow-pill" id="followPill" hidden>📡 Sharing your location · tap to manage</button>
+    <button class="follow-pill" id="listResultsBtn" style="left: 50%; transform: translateX(-50%); background: var(--ink); color: white; z-index: 890; transition: opacity 0.2s;" hidden>▤ List Results</button>
 
     <div class="sheet-backdrop" id="backdrop"></div>
     <section class="sheet" id="sheet" aria-live="polite"></section>
@@ -557,6 +558,10 @@
     let toastTimer = null;
     let tipTimer = null;
     let lastSearchAt = 0;
+    
+    // Tracking search functionality
+    let searchResultMarkers = [];
+    let currentSearchResults = [];
     let selectedSearchResult = null;
 
     if (!window.maplibregl) {
@@ -1068,11 +1073,75 @@
       }
     }
 
-    function showSearch() {
+    function showSearchList() {
+      const results = currentSearchResults || [];
+      let listHtml = `<div class="empty"><span class="big">🗺️</span>No places were found in the map area. Zoom or move the map, then search again.</div>`;
+      
+      if (results.length) {
+        listHtml = `<div class="search-results">${results.map((r, index) => {
+          const title = r.name || String(r.display_name || "Place").split(",")[0];
+          return `<div class="search-result" style="display:flex; justify-content:space-between; align-items:center; gap: 8px;">
+            <div style="flex:1; cursor:pointer;" data-action="select-search" data-index="${index}">
+              <strong>${esc(title)}</strong>
+              <small>${esc(r.display_name)}</small>
+            </div>
+          </div>`;
+        }).join("")}</div>`;
+      }
+
       openSheet(`
         <div class="sheet-head"><h2>Search results</h2><button class="close-btn" data-action="close" aria-label="Close">×</button></div>
-        <div id="searchResults"><div class="empty"><span class="big">⌕</span>Searching Seattle…</div></div>
+        <div id="searchResults">${listHtml}</div>
       `);
+    }
+
+    function plotSearchResultsOnMap(results) {
+      searchResultMarkers.forEach(m => m.remove());
+      searchResultMarkers = [];
+
+      const listBtn = document.getElementById("listResultsBtn");
+
+      if (!results || !results.length) {
+        toast("No places found.");
+        if (listBtn) listBtn.hidden = true;
+        return;
+      }
+
+      const bounds = new maplibregl.LngLatBounds();
+
+      results.forEach((r, index) => {
+        const lat = Number(r.lat);
+        const lng = Number(r.lon);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+        bounds.extend([lng, lat]);
+
+        const title = r.name || String(r.display_name || "Place").split(",")[0];
+        const el = document.createElement("div");
+        el.className = "map-pin";
+        el.innerHTML = `<div class="pin-bubble" style="background:var(--danger)"><span>📍</span></div>`;
+        el.title = title;
+
+        const marker = new maplibregl.Marker({ element: el, anchor: "bottom" })
+          .setLngLat([lng, lat])
+          .addTo(map);
+
+        el.addEventListener("click", () => {
+          selectSearch(index);
+        });
+
+        searchResultMarkers.push(marker);
+      });
+
+      if (!bounds.isEmpty()) {
+        map.fitBounds(bounds, { padding: { top: 120, bottom: 80, left: 40, right: 40 }, maxZoom: 16 });
+      }
+
+      if (listBtn) {
+        listBtn.textContent = `▤ List ${results.length} Results`;
+        listBtn.hidden = false;
+      }
+      toast(`Showing ${results.length} results on map.`);
     }
 
     function visibleSearchBounds() {
@@ -1180,11 +1249,20 @@
 
     async function searchPlaces(query) {
       const q = query.trim();
-      if (q.length < 2) return toast("Type at least two letters.");
+      if (q.length < 2) {
+        if (q.length === 0) {
+          searchResultMarkers.forEach(m => m.remove());
+          searchResultMarkers = [];
+          currentSearchResults = [];
+          const listBtn = document.getElementById("listResultsBtn");
+          if (listBtn) listBtn.hidden = true;
+        }
+        return toast("Type at least two letters.");
+      }
       const now = Date.now();
       if (now - lastSearchAt < 900) return toast("Please wait a moment before searching again.");
       lastSearchAt = now;
-      showSearch();
+      toast("Searching...");
 
       const isAddress = looksLikeStreetAddress(q);
       const bounds = visibleSearchBounds();
@@ -1224,10 +1302,11 @@
           const limitedCache = Object.fromEntries(Object.entries(cache).slice(-40));
           localStorage.setItem(SEARCH_CACHE_KEY, JSON.stringify(limitedCache));
         }
-        renderSearchResults(results || []);
+        
+        currentSearchResults = results || [];
+        plotSearchResultsOnMap(currentSearchResults);
       } catch (_) {
-        const el = document.getElementById("searchResults");
-        if (el) el.innerHTML = `<div class="empty"><span class="big">⚠️</span>Search could not load. Check the internet connection, or use Add and tap the map.</div>`;
+        toast("Search could not load. Check internet connection.");
       }
     }
 
@@ -1243,25 +1322,8 @@
       return "other";
     }
 
-    function renderSearchResults(results) {
-      const el = document.getElementById("searchResults");
-      if (!el) return;
-      if (!results.length) {
-        el.innerHTML = `<div class="empty"><span class="big">🗺️</span>No places were found in the map area. Zoom or move the map, then search again.</div>`;
-        return;
-      }
-      el.innerHTML = `<div class="search-results">${results.map((r, index) => {
-        const title = r.name || String(r.display_name || "Place").split(",")[0];
-        return `<button class="search-result" data-action="select-search" data-index="${index}"><strong>${esc(title)}</strong><small>${esc(r.display_name)}</small></button>`;
-      }).join("")}</div>`;
-      el.dataset.results = JSON.stringify(results);
-    }
-
     function selectSearch(index) {
-      const holder = document.getElementById("searchResults");
-      if (!holder) return;
-      const results = JSON.parse(holder.dataset.results || "[]");
-      const result = results[index];
+      const result = currentSearchResults[index];
       if (!result) return;
       selectedSearchResult = result;
       const lat = Number(result.lat);
@@ -1413,9 +1475,9 @@
 
     function nextDestinationHTML() {
       const next=todayEvents()[0];
-      if (!next) return `<div class="next-card"><h3>Next destination</h3><p>No more scheduled places today.</p><button class="btn" data-action="add-event">＋ Add schedule item</button></div>`;
+      if (!next) return `<div class="next-card"><h3>Next destination</h3><p>No more scheduled places today.</p></div>`;
       const place=places.find(p=>p.id===next.placeId);
-      return `<div class="next-card"><h3>Next destination</h3><p><strong>${esc(next.title)}</strong> · ${formatTime(next.time)}</p><p>${place?`${(CATEGORIES[place.category]||CATEGORIES.other).emoji} ${esc(place.title)}`:"Choose a saved location"}</p>${place?`<button class="btn" data-action="plan-event" data-id="${next.id}">Plan this trip</button>`:""}</div>`;
+      return `<div class="next-card"><h3>Next destination</h3><p><strong>${esc(next.title)}</strong> · ${formatTime(next.time)}</p><p>${place?`${(CATEGORIES[place.category]\vert{}\vert{}CATEGORIES.other).emoji}${esc(place.title)}`:"Choose a saved location"}</p>${place?`<button class="btn" data-action="plan-event" data-id="${next.id}">Plan this trip</button>`:""}</div>`;
     }
 
     function showDashboard() {
@@ -1472,7 +1534,13 @@
         const place=places.find(p=>p.id===e.placeId);
         return `<div class="event-card"><h3>${esc(e.title)}</h3><p>⏰ ${formatTime(e.time)} · ${esc(eventDaysLabel(e))}</p><p>📍 ${place?esc(place.title):"No location selected"}</p><div class="event-actions"><button class="btn primary" data-action="plan-event" data-id="${e.id}">Plan trip</button><button class="btn" data-action="edit-event" data-id="${e.id}">Edit</button></div></div>`;
       }).join("") || `<div class="empty"><span class="big">📅</span>No schedule items yet. Add classes, work shifts, appointments, or regular trips.</div>`;
-      openSheet(`<div class="sheet-head"><h2>Schedule</h2><button class="close-btn" data-action="close">×</button></div>${nextDestinationHTML()}<button class="btn gold" data-action="add-event">＋ Add class, work, or event</button>${items}`);
+      
+      openSheet(`
+        <div class="sheet-head"><h2>Schedule</h2><button class="close-btn" data-action="close">×</button></div>
+        ${nextDestinationHTML()}
+        <button class="btn primary" style="width:100%; margin-bottom:12px;" data-action="add-event">＋ Add Schedule Item</button>
+        ${items}
+      `);
     }
 
     function showEventForm(item={}) {
@@ -1618,6 +1686,7 @@
       event.preventDefault();
       searchPlaces(document.getElementById("searchInput").value);
     });
+    document.getElementById("listResultsBtn").addEventListener("click", showSearchList);
     document.getElementById("addBtn").addEventListener("click", () => {
       if (placementMode) {
         placementMode = false;
@@ -1664,7 +1733,9 @@
       if (action === "directions") { const p = places.find(x => x.id === id); if (p) openDirections(p, button.dataset.mode); }
       if (action === "share") { const p = places.find(x => x.id === id); if (p) sharePlace(p); }
       if (action === "filter") { activeFilter = button.dataset.filter || "all"; renderMarkers(); showPins(); }
+      
       if (action === "select-search") selectSearch(Number(button.dataset.index));
+
       if (action === "export") exportData();
       if (action === "import") document.getElementById("importInput").click();
       if (action === "center-uw") { closeSheet(); setMapView(UW.lat, UW.lng, 15); }
