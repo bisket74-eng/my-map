@@ -365,6 +365,19 @@
     .menu-item { width: 100%; padding: 13px; border-radius: 14px; border: 1px solid #e3dce9; background: white; text-align: left; font-weight: 800; }
     .fine-print { font-size: 12px; color: var(--muted); line-height: 1.45; }
 
+    .follow-pill { position: fixed; left: 12px; bottom: calc(96px + var(--safe-bottom)); z-index: 890; border: 0; border-radius: 999px; padding: 9px 14px; background: var(--purple); color: #fff; font-weight: 800; font-size: 13px; box-shadow: var(--shadow); }
+    .follow-pill[hidden] { display: none; }
+    .follow-marker { position: relative; width: 38px; height: 38px; }
+    .follow-dot { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; background: var(--gold); color: #3a2d0f; font-weight: 900; border: 3px solid #fff; box-shadow: var(--shadow); }
+    .follow-label { position: absolute; bottom: 100%; left: 50%; transform: translate(-50%, -4px); white-space: nowrap; background: #fff; color: var(--ink); border-radius: 10px; padding: 3px 8px; font-size: 12px; font-weight: 800; box-shadow: var(--shadow); }
+    .partner-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px; background: #f8f5fb; border-radius: 14px; margin: 8px 0; font-weight: 800; }
+    .partner-row small { display: block; font-weight: 600; color: var(--muted); }
+    .mini-row { display: flex; gap: 8px; margin: 0 0 14px; }
+    .mini-btn { flex: 1; min-height: 40px; padding: 8px; border: 1px solid #e3dce9; border-radius: 12px; background: #fff; color: var(--ink); font-size: 13px; font-weight: 800; }
+    .locate-btn { position: fixed; right: 12px; bottom: calc(96px + var(--safe-bottom)); z-index: 890; width: 48px; height: 48px; padding: 0; display: grid; place-items: center; border: 0; border-radius: 50%; background: #fff; color: var(--purple); box-shadow: var(--shadow); }
+    .locate-btn:active { transform: scale(.94); }
+    .locate-btn.busy svg { animation: locate-pulse 1s ease-in-out infinite; }
+    @keyframes locate-pulse { 50% { opacity: .35; } }
     .quick-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:9px; margin:10px 0 15px; }
     .quick-card { min-height:82px; padding:12px 9px; border:1px solid #e3dce9; border-radius:17px; background:#fff; text-align:center; font-weight:850; color:var(--ink); }
     .quick-card span { display:block; font-size:27px; margin-bottom:5px; }
@@ -472,6 +485,11 @@
       <button class="nav-btn" id="moreBtn"><span>☰</span><span>More</span></button>
     </nav>
 
+    <button class="locate-btn" id="locateBtn" aria-label="Show my location" title="Show my location">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3"/></svg>
+    </button>
+    <button class="follow-pill" id="followPill" hidden>📡 Sharing your location · tap to manage</button>
+
     <div class="sheet-backdrop" id="backdrop"></div>
     <section class="sheet" id="sheet" aria-live="polite"></section>
     <div class="toast" id="toast"></div>
@@ -484,6 +502,14 @@
     "use strict";
 
     const APP_VERSION = 12;
+
+    /* ===== FIND ME SETUP: paste your Supabase values here (see SETUP-FIND-ME.txt) ===== */
+    const FOLLOW_CONFIG = {
+      url: "",              // e.g. https://abcdxyz.supabase.co
+      anonKey: "",          // the public "anon" / publishable key
+      vapidPublicKey: "",   // same public VAPID key your Chaser app uses (needed for notifications only)
+      nudgeFunction: "mymap-nudge"
+    };
     const STORAGE_KEY = "huskySteps.places.v1";
     const SETTINGS_KEY = "huskySteps.settings.v1";
     const SCHEDULE_KEY = "mymap.schedule.v1";
@@ -1404,7 +1430,12 @@
           <button class="quick-card" data-action="show-neighborhoods"><span>🗺️</span>Neighborhoods</button>
           <button class="quick-card" data-action="toggle-transit"><span>🚉</span>Nearby transit</button>
           <button class="quick-card" data-action="show-meet"><span>🤝</span>Meet Me</button>
-          <button class="quick-card" data-action="locate"><span>◎</span>My location</button>
+          <button class="quick-card" data-action="follow"><span>📡</span>Find Me</button>
+        </div>
+        <div class="mini-row">
+          <button class="mini-btn" data-action="export">💾 Backup</button>
+          <button class="mini-btn" data-action="import">📂 Restore</button>
+          <button class="mini-btn" data-action="help">❓ Help</button>
         </div>
       `);
     }
@@ -1517,7 +1548,8 @@
         <div class="place-note"><strong>Walking and transit:</strong> Open any saved pin and press Walk or Transit. Live directions open in Google Maps using your current location when available.</div>
         <div class="place-note"><strong>Transit stops:</strong> Press Transit to load nearby bus stops and rail stations. Use a neighborhood button first, then press Transit to load that area.</div>
         <div class="place-note"><strong>Important places:</strong> Press + to save your home, work location, school, and each campus building you regularly visit.</div>
-        <div class="place-note"><strong>Backup:</strong> Use the MM menu to download a backup file. Restore that file on another phone or browser.</div>
+        <div class="place-note"><strong>Backup:</strong> Tap More, then Backup, to download a file. On another phone or browser, tap More, then Restore, and pick that file.</div>
+        <div class="place-note"><strong>Find Me:</strong> Tap More, then Find Me. You and another person enter the same passcode and see each other on the map.</div>
       `);
     }
 
@@ -1661,6 +1693,286 @@
       if (action === "toggle-transit") { closeSheet(); toggleTransit(); }
       if (action === "locate") { closeSheet(); locateUser(true); }
     });
+
+
+    /* ================= FOLLOW ME ================= */
+    const FOLLOW_KEY = "mymap.follow.v1";
+    let follow = loadJSON(FOLLOW_KEY, {});
+    let followPartners = [];
+    let followWatchId = null, followPollTimer = null, followLastSent = 0, followLastPos = null;
+    const followMarkers = new Map();
+
+    const followReady = () => !!(FOLLOW_CONFIG.url && FOLLOW_CONFIG.anonKey);
+    function saveFollow() { try { localStorage.setItem(FOLLOW_KEY, JSON.stringify(follow)); } catch (_) {} }
+
+    function followHeaders() {
+      const h = { apikey: FOLLOW_CONFIG.anonKey, "Content-Type": "application/json" };
+      if (FOLLOW_CONFIG.anonKey.startsWith("eyJ")) h.Authorization = "Bearer " + FOLLOW_CONFIG.anonKey;
+      return h;
+    }
+
+    async function followRpc(fn, body) {
+      const res = await fetch(`${FOLLOW_CONFIG.url}/rest/v1/rpc/${fn}`, { method: "POST", headers: followHeaders(), body: JSON.stringify(body) });
+      if (!res.ok) throw new Error(await res.text());
+      const text = await res.text();
+      return text ? JSON.parse(text) : null;
+    }
+
+    async function followRoomFromPasscode(passcode) {
+      const bytes = new TextEncoder().encode("mymap-follow:" + passcode.trim().toLowerCase());
+      const hash = await crypto.subtle.digest("SHA-256", bytes);
+      return [...new Uint8Array(hash)].map(b => b.toString(16).padStart(2, "0")).join("").slice(0, 40);
+    }
+
+    function followAgo(iso) {
+      const sec = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+      if (sec < 45) return "just now";
+      if (sec < 3600) return Math.round(sec / 60) + " min ago";
+      return Math.round(sec / 3600) + " h ago";
+    }
+
+    function b64ToU8(b64) {
+      const s = (b64 + "=".repeat((4 - b64.length % 4) % 4)).replace(/-/g, "+").replace(/_/g, "/");
+      const raw = atob(s);
+      return Uint8Array.from(raw, c => c.charCodeAt(0));
+    }
+
+    async function followGetSub() {
+      try {
+        if (!FOLLOW_CONFIG.vapidPublicKey || !("serviceWorker" in navigator) || !("PushManager" in window)) return null;
+        if (!("Notification" in window) || Notification.permission !== "granted") return null;
+        const reg = await navigator.serviceWorker.ready;
+        let sub = await reg.pushManager.getSubscription();
+        if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(FOLLOW_CONFIG.vapidPublicKey) });
+        return sub.toJSON();
+      } catch (_) { return null; }
+    }
+
+    async function followSend(pos, withPush) {
+      if (!follow.sharing || !follow.room) return;
+      const c = (pos && pos.coords) || followLastPos || null;
+      const body = {
+        p_room: follow.room, p_member: follow.memberId, p_name: follow.name || "Me",
+        p_lat: c ? c.latitude : null, p_lng: c ? c.longitude : null, p_acc: c && c.accuracy != null ? c.accuracy : null,
+        p_push: null, p_set_push: false
+      };
+      if (withPush) {
+        const sub = await followGetSub();
+        if (sub) { body.p_push = sub; body.p_set_push = true; }
+      }
+      try { await followRpc("mymap_share", body); if (c) followLastSent = Date.now(); } catch (_) {}
+    }
+
+    function followStartWatch() {
+      if (followWatchId != null || !navigator.geolocation) return;
+      followWatchId = navigator.geolocation.watchPosition(pos => {
+        const c = pos.coords;
+        followLastPos = { latitude: c.latitude, longitude: c.longitude, accuracy: c.accuracy };
+        if (Date.now() - followLastSent > 10000) followSend(pos);
+      }, err => {
+        if (err.code === 1) toast("Location permission is off, so your partner can't see you.");
+      }, { enableHighAccuracy: true, maximumAge: 8000, timeout: 20000 });
+    }
+
+    function followSendFresh() {
+      if (!follow.sharing || !navigator.geolocation) return;
+      navigator.geolocation.getCurrentPosition(pos => {
+        const c = pos.coords;
+        followLastPos = { latitude: c.latitude, longitude: c.longitude, accuracy: c.accuracy };
+        followSend(pos);
+      }, () => {}, { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 });
+    }
+
+    function followRenderMarkers() {
+      const seen = new Set();
+      followPartners.forEach(p => {
+        seen.add(p.member_id);
+        let m = followMarkers.get(p.member_id);
+        if (!m) {
+          const el = document.createElement("div");
+          el.className = "follow-marker";
+          m = { el, marker: new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat([p.lng, p.lat]).addTo(map) };
+          followMarkers.set(p.member_id, m);
+        }
+        m.marker.setLngLat([p.lng, p.lat]);
+        m.el.innerHTML = `<span class="follow-label">${esc(p.name || "Partner")} · ${followAgo(p.updated_at)}</span><span class="follow-dot">${esc((p.name || "?").trim().charAt(0).toUpperCase())}</span>`;
+      });
+      for (const [id, m] of followMarkers) {
+        if (!seen.has(id)) { m.marker.remove(); followMarkers.delete(id); }
+      }
+      const list = document.getElementById("followList");
+      if (list) list.innerHTML = followListHTML();
+    }
+
+    async function followPoll() {
+      if (!follow.sharing || !follow.room || document.hidden) return;
+      try {
+        const rows = await followRpc("mymap_partners", { p_room: follow.room, p_member: follow.memberId });
+        followPartners = Array.isArray(rows) ? rows.filter(r => Number.isFinite(r.lat) && Number.isFinite(r.lng)) : [];
+        followRenderMarkers();
+      } catch (_) {}
+    }
+
+    function followUpdatePill() {
+      document.getElementById("followPill").hidden = !follow.sharing;
+    }
+
+    function followBegin(registerPush) {
+      followStartWatch();
+      clearInterval(followPollTimer);
+      followPollTimer = setInterval(() => {
+        followPoll();
+        if (followLastPos && Date.now() - followLastSent > 30000) followSend(null);
+      }, 8000);
+      followSend(null, registerPush);
+      followPoll();
+      followUpdatePill();
+    }
+
+    async function followStart(name, passcode) {
+      if (!followReady()) return toast("Find Me isn't set up yet.");
+      if (passcode.trim().length < 6) return toast("Use a passcode of at least 6 characters.");
+      if ("Notification" in window && Notification.permission === "default" && FOLLOW_CONFIG.vapidPublicKey) {
+        Notification.requestPermission().then(() => followSend(null, true)).catch(() => {});
+      }
+      follow.name = name.trim().slice(0, 30) || "Me";
+      follow.room = await followRoomFromPasscode(passcode);
+      follow.memberId = follow.memberId || uid();
+      follow.sharing = true;
+      saveFollow();
+      followBegin(true);
+      toast("Sharing is on. Your partner enters the same passcode.");
+      showFollow();
+    }
+
+    async function followStop() {
+      if (!confirm("Stop sharing your location?")) return;
+      const { room, memberId } = follow;
+      follow.sharing = false;
+      delete follow.room;
+      saveFollow();
+      if (followWatchId != null) { navigator.geolocation.clearWatch(followWatchId); followWatchId = null; }
+      clearInterval(followPollTimer);
+      followPartners = [];
+      followRenderMarkers();
+      followUpdatePill();
+      try { await followRpc("mymap_leave", { p_room: room, p_member: memberId }); } catch (_) {}
+      toast("Sharing stopped.");
+      showFollow();
+    }
+
+    async function followNudge() {
+      try {
+        const res = await fetch(`${FOLLOW_CONFIG.url}/functions/v1/${FOLLOW_CONFIG.nudgeFunction}`, {
+          method: "POST", headers: followHeaders(), body: JSON.stringify({ room: follow.room, from: follow.memberId })
+        });
+        const j = await res.json().catch(() => ({}));
+        if (res.ok && j.sent > 0) toast("Notification sent.");
+        else if (j.cooldown) toast("You just sent one. Give it a minute.");
+        else toast("They have no notifications on. Use Text them instead.");
+      } catch (_) { toast("Couldn't send. Use Text them instead."); }
+    }
+
+    function followText() {
+      const link = location.origin + location.pathname;
+      const msg = `${follow.name || "Your partner"} asked you to open MyMap so they can see your location: ${link}`;
+      location.href = "sms:?body=" + encodeURIComponent(msg);
+    }
+
+    async function followEnablePush() {
+      if (!("Notification" in window)) return toast("This browser can't show notifications.");
+      const result = await Notification.requestPermission();
+      if (result !== "granted") return toast("Notifications are blocked. Allow them in Chrome's site settings.");
+      await followSend(null, true);
+      toast("Notifications are on.");
+      showFollow();
+    }
+
+    function followListHTML() {
+      if (!followPartners.length) {
+        return '<div class="place-note">Waiting for your partner. They open MyMap, tap More, then Find Me, and enter the same passcode.</div>';
+      }
+      return followPartners.map(p => `<div class="partner-row"><div>${esc(p.name || "Partner")}<small>Updated ${followAgo(p.updated_at)}</small></div><button class="btn gold" style="width:auto;padding:9px 14px" data-action="follow-center" data-id="${esc(p.member_id)}">Show</button></div>`).join("");
+    }
+
+    function showFollow() {
+      const head = '<div class="sheet-head"><h2>Find Me</h2><button class="close-btn" data-action="close">×</button></div>';
+      if (!followReady()) {
+        openSheet(head + '<div class="place-note">Find Me needs a one-time setup. Open SETUP-FIND-ME.txt in your MyMap files and paste your Supabase values into index.html.</div>');
+        return;
+      }
+      if (!follow.sharing) {
+        openSheet(head + `
+          <div class="place-note">Both of you enter the same passcode. You will see each other on the map. Either of you can stop at any time.</div>
+          <form id="followForm">
+            <div class="field"><label>Your name</label><input name="name" maxlength="30" autocomplete="off" value="${esc(follow.name || "")}" placeholder="What your partner sees" required /></div>
+            <div class="field"><label>Shared passcode (6+ characters)</label><input name="passcode" autocomplete="off" autocapitalize="none" placeholder="Pick something only you two know" required /></div>
+            <button class="btn primary" type="submit">Start sharing and following</button>
+          </form>`);
+        return;
+      }
+      const pushOn = "Notification" in window && Notification.permission === "granted" && FOLLOW_CONFIG.vapidPublicKey;
+      openSheet(head + `
+        <div class="place-note"><strong>Sharing as ${esc(follow.name || "Me")}.</strong> Keep MyMap open so your location stays live.</div>
+        <div id="followList">${followListHTML()}</div>
+        <button class="btn primary" data-action="follow-nudge">🔔 Ask them to update their location</button>
+        <button class="btn gold" data-action="follow-text" style="margin-top:8px">💬 Text them instead</button>
+        ${pushOn ? "" : '<button class="btn gold" data-action="follow-push" style="margin-top:8px">Turn on notifications on this phone</button>'}
+        <button class="btn danger" data-action="follow-stop" style="margin-top:8px">Stop sharing</button>`);
+    }
+
+    sheet.addEventListener("click", event => {
+      const button = event.target.closest("[data-action]");
+      if (!button) return;
+      const a = button.dataset.action;
+      if (a === "follow") showFollow();
+      if (a === "follow-stop") followStop();
+      if (a === "follow-nudge") followNudge();
+      if (a === "follow-text") followText();
+      if (a === "follow-push") followEnablePush();
+      if (a === "follow-center") {
+        const p = followPartners.find(x => x.member_id === button.dataset.id);
+        if (p) { closeSheet(); setMapView(p.lat, p.lng, Math.max(map.getZoom(), 16), true); }
+      }
+    });
+
+    sheet.addEventListener("submit", event => {
+      if (event.target.id === "followForm") {
+        event.preventDefault();
+        const d = new FormData(event.target);
+        followStart(String(d.get("name") || ""), String(d.get("passcode") || ""));
+      }
+    });
+
+    document.getElementById("followPill").addEventListener("click", showFollow);
+    document.getElementById("locateBtn").addEventListener("click", event => {
+      const btn = event.currentTarget;
+      btn.classList.add("busy");
+      locateUser(true);
+      setTimeout(() => btn.classList.remove("busy"), 2500);
+    });
+
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden && follow.sharing) { followSendFresh(); followPoll(); }
+    });
+
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.addEventListener("message", event => {
+        if (event.data && event.data.type === "nudge" && follow.sharing) {
+          toast("Your partner asked for your location. Sending it now.");
+          followSendFresh();
+        }
+      });
+    }
+
+    if (follow.sharing && follow.room && followReady()) {
+      followBegin(false);
+      followSendFresh();
+      if (/[?&]nudge=1/.test(location.search)) toast("Your partner asked for your location. Sending it now.");
+    } else {
+      followUpdatePill();
+    }
+    /* ================= END FOLLOW ME ================= */
 
     if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
       window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js?V=14").catch(() => {}));
