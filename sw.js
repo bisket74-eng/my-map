@@ -1,4 +1,4 @@
-const CACHE = "mymap-v14-address-search";
+const CACHE = "mymap-v16-carto-key";
 const APP_SHELL = ["./", "./index.html", "./manifest.json", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", event => {
